@@ -1,21 +1,19 @@
-import { AnthropicVertex } from "@anthropic-ai/vertex-sdk"
-import { Anthropic } from "@anthropic-ai/sdk"
-import { BadRequestError } from "@anthropic-ai/vertex-sdk/core/error.mjs"
-import { ToolDefinition } from "./agent/types.js"
+import { Anthropic, BadRequestError } from "@anthropic-ai/sdk"
+import { AnyTool, isServerTool } from "./agent/types.js"
 
 export class Agent {
   constructor(
-    private client: AnthropicVertex,
+    private client: Anthropic,
     private getUserMessage: () => Promise<string>,
     private getToolConsent: (toolDescription: string) => Promise<boolean>,
     private showAgentMessage: (message: string) => void,
-    private tools: ToolDefinition[],
+    private tools: AnyTool[],
   ) {}
 
   async run() {
     const conversation: Anthropic.MessageParam[] = []
 
-    console.log("Chat with Claude (use 'ctrl-c' to quit)")
+    console.log("Maria Chat with Claude (use 'ctrl-c' to quit)", conversation)
 
     let readUserInput = true
     while (true) {
@@ -25,10 +23,14 @@ export class Agent {
           content: await this.getUserMessage(),
         }
         conversation.push(userMessage)
+        console.log("1===========>>> userMessage", userMessage)
       }
 
       try {
-        const result = await this.runInference(conversation)
+        const result = await this.generateClientMessage(conversation)
+        console.log("2===========>>> result", result)
+        const resultMessage = this.messageToMessageParam(result)
+        console.log("3============>>>resultMessage", resultMessage)
         conversation.push(this.messageToMessageParam(result))
 
         const toolResults: Anthropic.ContentBlockParam[] = []
@@ -67,17 +69,21 @@ export class Agent {
     }
   }
 
-  private runInference(
+  private generateClientMessage(
     conversation: Anthropic.MessageParam[],
   ): Promise<Anthropic.Message> {
-    const anthropicTools: Anthropic.ToolUnion[] = this.tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      input_schema: tool.input_schema,
-    }))
+    const anthropicTools: Anthropic.ToolUnion[] = this.tools.map((tool) =>
+      "type" in tool
+        ? tool
+        : {
+            name: tool.name,
+            description: tool.description,
+            input_schema: tool.input_schema,
+          },
+    )
 
     return this.client.messages.create({
-      model: "claude-3-7-sonnet@20250219",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       messages: conversation,
       tools: anthropicTools,
@@ -90,7 +96,7 @@ export class Agent {
     input: unknown,
   ): Promise<Anthropic.ContentBlockParam> {
     const tool = this.tools.find((t) => t.name === name)
-    if (!tool) {
+    if (!tool || !("func" in tool)) {
       return {
         tool_use_id: id,
         type: "tool_result",

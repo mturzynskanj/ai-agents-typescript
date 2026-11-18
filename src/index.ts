@@ -1,18 +1,13 @@
-import { AnthropicVertex } from "@anthropic-ai/vertex-sdk"
+import { Anthropic } from "@anthropic-ai/sdk"
 import * as readline from "readline/promises"
 import { Agent } from "./agent.js"
 import tools from "./agent/tools/index.js"
-
-const projectId = "cross-camp-ai-enablement"
-const region = "us-east5"
+import 'dotenv/config'
 
 main()
 
 async function main() {
-  const client = new AnthropicVertex({
-    projectId,
-    region,
-  })
+  const client = new Anthropic({apiKey: process.env.ANTHROPIC_API_KEY})
 
   const agent = new Agent(
     client,
@@ -66,5 +61,5 @@ async function getToolConsent(toolDescription: string): Promise<boolean> {
 }
 
 function showAgentMessage(message: string): void {
-  console.log(`\n\u001b[93mClaude\u001b[0m: ${message}\n`)
+  console.log(`\n\u001b[93mClaude to ME\u001b[0m: ${message}\n`)
 }
